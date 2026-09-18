@@ -1,0 +1,10 @@
+[package]
+name = "formula-linter"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Streaming linter for exported spreadsheet formulas"
+
+[[bin]]
+name = "flint"
+path = "src/main.rs"
