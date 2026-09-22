@@ -42,6 +42,7 @@ pub fn check_line(line_number: usize, raw: &str) -> Vec<Finding> {
 
     check_parens(line_number, body, &mut findings);
     check_volatile(line_number, body, &mut findings);
+    check_cross_sheet(line_number, body, &mut findings);
 
     findings
 }
@@ -89,4 +90,84 @@ fn check_volatile(line_number: usize, body: &str, findings: &mut Vec<Finding>) {
             });
         }
     }
+}
+
+/// Flags references to another sheet by name, e.g. `Sheet2!A1` or
+/// `'Q3 Actuals'!B2`. These aren't wrong, but a hardcoded sheet name
+/// breaks silently the moment someone renames or reorders the sheet,
+/// and the formula that used it just starts returning #REF! with no
+/// hint of why. Reports each distinct sheet name once per line.
+fn check_cross_sheet(line_number: usize, body: &str, findings: &mut Vec<Finding>) {
+    let chars: Vec<char> = body.chars().collect();
+    let mut seen: Vec<String> = Vec::new();
+    let mut in_string = false;
+    let mut i = 0;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        if ch == '"' {
+            in_string = !in_string;
+            i += 1;
+            continue;
+        }
+        if in_string {
+            i += 1;
+            continue;
+        }
+
+        if ch == '\'' {
+            let start = i + 1;
+            let mut j = start;
+            while j < chars.len() && chars[j] != '\'' {
+                j += 1;
+            }
+            if j < chars.len() && j + 1 < chars.len() && chars[j + 1] == '!' {
+                let name: String = chars[start..j].iter().collect();
+                record_sheet_reference(line_number, name, &mut seen, findings);
+                i = j + 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if ch.is_alphabetic() || ch == '_' {
+            let start = i;
+            let mut j = i;
+            while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '_' || chars[j] == '.') {
+                j += 1;
+            }
+            if j < chars.len() && chars[j] == '!' {
+                let name: String = chars[start..j].iter().collect();
+                record_sheet_reference(line_number, name, &mut seen, findings);
+                i = j + 1;
+                continue;
+            }
+            i = j;
+            continue;
+        }
+
+        i += 1;
+    }
+}
+
+fn record_sheet_reference(
+    line_number: usize,
+    name: String,
+    seen: &mut Vec<String>,
+    findings: &mut Vec<Finding>,
+) {
+    if name.is_empty() || seen.contains(&name) {
+        return;
+    }
+    seen.push(name.clone());
+    findings.push(Finding {
+        line: line_number,
+        rule: "cross-sheet-reference",
+        message: format!(
+            "hardcoded reference to sheet '{}'; renaming or reordering that sheet will silently break this formula",
+            name
+        ),
+    });
 }

@@ -33,6 +33,7 @@ $ flint formulas.txt
 1: [unbalanced-parens] missing 1 closing ')'
 3: [empty-formula] formula has no expression after '='
 4: [volatile-function] uses NOW( which recalculates on every sheet edit
+5: [cross-sheet-reference] hardcoded reference to sheet 'Sheet2'; renaming or reordering that sheet will silently break this formula
 ```
 
 It also reads from stdin, so it fits in a pipeline:
@@ -60,6 +61,10 @@ memory first.
 - `volatile-function` — use of `NOW`, `TODAY`, `RAND`, `RANDBETWEEN`,
   `OFFSET`, or `INDIRECT`, all of which force recalculation on every
   edit to the sheet, not just when their inputs change
+- `cross-sheet-reference` — a hardcoded reference to another sheet,
+  either bare (`Sheet2!A1`) or quoted (`'Q3 Actuals'!B2`); renaming
+  or reordering the referenced sheet breaks these silently, so
+  they're worth a second look during a sheet reorganization
 
 Lines starting with `#` are treated as comments and skipped.
 
