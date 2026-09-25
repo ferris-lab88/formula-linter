@@ -6,15 +6,33 @@ use std::fmt;
 /// from the symptom alone.
 const VOLATILE_FUNCTIONS: [&str; 6] = ["NOW(", "TODAY(", "RAND(", "RANDBETWEEN(", "OFFSET(", "INDIRECT("];
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    // The formula is broken or will evaluate to something other than intended.
+    Error,
+    // The formula works but is worth a second look (performance, fragility).
+    Warning,
+}
+
+impl fmt::Display for Severity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Severity::Error => write!(f, "error"),
+            Severity::Warning => write!(f, "warning"),
+        }
+    }
+}
+
 pub struct Finding {
     pub line: usize,
     pub rule: &'static str,
+    pub severity: Severity,
     pub message: String,
 }
 
 impl fmt::Display for Finding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: [{}] {}", self.line, self.rule, self.message)
+        write!(f, "{}: {}: [{}] {}", self.line, self.severity, self.rule, self.message)
     }
 }
 
@@ -35,6 +53,7 @@ pub fn check_line(line_number: usize, raw: &str) -> Vec<Finding> {
         findings.push(Finding {
             line: line_number,
             rule: "empty-formula",
+            severity: Severity::Error,
             message: "formula has no expression after '='".to_string(),
         });
         return findings;
@@ -61,6 +80,7 @@ fn check_parens(line_number: usize, body: &str, findings: &mut Vec<Finding>) {
                     findings.push(Finding {
                         line: line_number,
                         rule: "unbalanced-parens",
+                        severity: Severity::Error,
                         message: "unexpected ')' with no matching '('".to_string(),
                     });
                     return;
@@ -74,6 +94,7 @@ fn check_parens(line_number: usize, body: &str, findings: &mut Vec<Finding>) {
         findings.push(Finding {
             line: line_number,
             rule: "unbalanced-parens",
+            severity: Severity::Error,
             message: format!("missing {} closing ')'", depth),
         });
     }
@@ -86,6 +107,7 @@ fn check_volatile(line_number: usize, body: &str, findings: &mut Vec<Finding>) {
             findings.push(Finding {
                 line: line_number,
                 rule: "volatile-function",
+                severity: Severity::Warning,
                 message: format!("uses {} which recalculates on every sheet edit", &name[..name.len() - 1]),
             });
         }
@@ -165,6 +187,7 @@ fn record_sheet_reference(
     findings.push(Finding {
         line: line_number,
         rule: "cross-sheet-reference",
+        severity: Severity::Warning,
         message: format!(
             "hardcoded reference to sheet '{}'; renaming or reordering that sheet will silently break this formula",
             name

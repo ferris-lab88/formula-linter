@@ -30,10 +30,11 @@ $ cat formulas.txt
 =VLOOKUP(A1, Sheet2!A:B, 2, FALSE)
 
 $ flint formulas.txt
-1: [unbalanced-parens] missing 1 closing ')'
-3: [empty-formula] formula has no expression after '='
-4: [volatile-function] uses NOW( which recalculates on every sheet edit
-5: [cross-sheet-reference] hardcoded reference to sheet 'Sheet2'; renaming or reordering that sheet will silently break this formula
+1: error: [unbalanced-parens] missing 1 closing ')'
+3: error: [empty-formula] formula has no expression after '='
+4: warning: [volatile-function] uses NOW( which recalculates on every sheet edit
+5: warning: [cross-sheet-reference] hardcoded reference to sheet 'Sheet2'; renaming or reordering that sheet will silently break this formula
+4 issues (2 errors, 2 warnings)
 ```
 
 It also reads from stdin, so it fits in a pipeline:
@@ -42,8 +43,13 @@ It also reads from stdin, so it fits in a pipeline:
 $ ./export_formulas.sh mysheet.xlsx | flint -
 ```
 
-Exit code is `0` if nothing was flagged, `1` if there were findings,
-and `2` on a usage or I/O error.
+Every run ends with a one-line summary, either `no issues found` or a
+count broken down by severity, so you don't have to scroll back
+through a long report to see whether anything serious turned up.
+
+Exit code is `0` if there were no errors (warnings alone don't fail
+the run), `1` if at least one error was found, and `2` on a usage or
+I/O error.
 
 ## How it handles large input
 
@@ -55,16 +61,22 @@ memory first.
 
 ## Current checks
 
-- `unbalanced-parens` — a formula whose parentheses don't close
-  (ignores parentheses inside quoted string literals)
-- `empty-formula` — a line that is just `=` with nothing after it
-- `volatile-function` — use of `NOW`, `TODAY`, `RAND`, `RANDBETWEEN`,
-  `OFFSET`, or `INDIRECT`, all of which force recalculation on every
-  edit to the sheet, not just when their inputs change
-- `cross-sheet-reference` — a hardcoded reference to another sheet,
-  either bare (`Sheet2!A1`) or quoted (`'Q3 Actuals'!B2`); renaming
-  or reordering the referenced sheet breaks these silently, so
-  they're worth a second look during a sheet reorganization
+- `unbalanced-parens` (error) — a formula whose parentheses don't
+  close (ignores parentheses inside quoted string literals)
+- `empty-formula` (error) — a line that is just `=` with nothing
+  after it
+- `volatile-function` (warning) — use of `NOW`, `TODAY`, `RAND`,
+  `RANDBETWEEN`, `OFFSET`, or `INDIRECT`, all of which force
+  recalculation on every edit to the sheet, not just when their
+  inputs change
+- `cross-sheet-reference` (warning) — a hardcoded reference to
+  another sheet, either bare (`Sheet2!A1`) or quoted (`'Q3
+  Actuals'!B2`); renaming or reordering the referenced sheet breaks
+  these silently, so they're worth a second look during a sheet
+  reorganization
+
+An error means the formula is broken or does something other than
+intended; a warning means it works but is worth a second look.
 
 Lines starting with `#` are treated as comments and skipped.
 

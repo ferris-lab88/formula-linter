@@ -1,5 +1,6 @@
 mod lint;
 
+use lint::Severity;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
@@ -27,7 +28,8 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut found_any = false;
+    let mut error_count = 0usize;
+    let mut warning_count = 0usize;
 
     // lines() yields one owned String at a time and drops the previous
     // one before reading the next, so memory use stays flat no matter
@@ -42,12 +44,32 @@ fn main() -> ExitCode {
         };
 
         for finding in lint::check_line(index + 1, &line) {
+            match finding.severity {
+                Severity::Error => error_count += 1,
+                Severity::Warning => warning_count += 1,
+            }
             println!("{}", finding);
-            found_any = true;
         }
     }
 
-    if found_any {
+    let total = error_count + warning_count;
+    if total == 0 {
+        println!("no issues found");
+    } else {
+        println!(
+            "{} issue{} ({} error{}, {} warning{})",
+            total,
+            if total == 1 { "" } else { "s" },
+            error_count,
+            if error_count == 1 { "" } else { "s" },
+            warning_count,
+            if warning_count == 1 { "" } else { "s" },
+        );
+    }
+
+    // Warnings are worth reading but shouldn't fail a CI step on their own;
+    // only a real error (a broken or empty formula) should trip the exit code.
+    if error_count > 0 {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
